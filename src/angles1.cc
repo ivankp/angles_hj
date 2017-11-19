@@ -20,6 +20,11 @@ using std::endl;
 using namespace ivanp;
 using namespace ivanp::math;
 
+template <typename... Args>
+inline void write(const char* name, Args&&... args) {
+  TNamed(name,cat(args...).c_str()).Write();
+}
+
 int main(int argc, char* argv[]) {
   const char *ifname, *ofname;
   std::array<double,2> Hj_mass_range;
@@ -71,6 +76,8 @@ int main(int argc, char* argv[]) {
 
     tout->Fill();
   }
+
+  write("M range",'[',Hj_mass_range[0],',',Hj_mass_range[1],')');
 
   fout.Write(0,TObject::kOverwrite);
 }

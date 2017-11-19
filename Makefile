@@ -28,11 +28,11 @@ rpath_script := ldd $(shell root-config --libdir)/libTreePlayer.so \
   | sed -nr '/^(\/usr)?\/lib/!s/^/-Wl,-rpath=/p'
 ROOT_LDLIBS += $(shell $(rpath_script))
 
-C_select1 := $(ROOT_CXXFLAGS)
-L_select1 := $(ROOT_LDLIBS)
+C_angles1 := $(ROOT_CXXFLAGS)
+L_angles1 := $(ROOT_LDLIBS)
 
-C_select := $(ROOT_CXXFLAGS)
-L_select := $(ROOT_LDLIBS)
+C_angles := $(ROOT_CXXFLAGS)
+L_angles := $(ROOT_LDLIBS)
 
 C_fit := $(ROOT_CXXFLAGS)
 L_fit := $(ROOT_LDLIBS) -lMinuit
@@ -48,7 +48,7 @@ EXES := $(patsubst $(SRC)%$(EXT),$(BIN)%,$(shell $(GREP_EXES)))
 
 all: $(EXES)
 
-$(BIN)/select $(BIN)/select1 $(BIN)/fit $(BIN)/draw: $(BLD)/program_options.o
+$(BIN)/angles $(BIN)/angles1 $(BIN)/fit $(BIN)/draw: $(BLD)/program_options.o
 
 -include $(DEPS)
 
