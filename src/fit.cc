@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
     if (program_options()
         (ifname,'i',"input file",req(),pos())
         (ofname,'o',"output file",req())
-        // (range,'r',cat("|cos Θ| range [",range[0],',',range[1],']'))
+        // (range,'r',cat("|cos_theta Θ| range [",range[0],',',range[1],']'))
         (npar,'n',cat("number of fit parameters [",npar,']'))
         (pars_init,'p',"parameters' initial values")
         (pars_lim,'l',"parameters' limits")
@@ -72,27 +72,26 @@ int main(int argc, char* argv[]) {
   if (fin.IsZombie()) return 1;
 
   TTree *tin;
-  fin.GetObject("cos",tin);
+  fin.GetObject("angles",tin);
   if (!tin) return 1;
 
-  double cos;
-  tin->SetBranchAddress("cos",&cos);
+  double cos_theta;
+  tin->SetBranchAddress("cos_theta",&cos_theta);
 
   TFile fout(ofname,"recreate");
   info("Output file",fout.GetName());
   if (fout.IsZombie()) return 1;
   fout.cd();
 
-  TH1D *h = new TH1D("abs_cos_theta","|cos #theta|",nbins,0,1);
+  TH1D *h = new TH1D("abs_cos_theta","|cos_theta #theta|",nbins,0,1);
 
   std::vector<double> vals;
   const Long64_t nent = tin->GetEntries();
   vals.reserve(nent);
 
-  using cnt = timed_counter<Long64_t>;
-  for (cnt ent(nent); !!ent; ++ent) {
+  for (timed_counter<Long64_t> ent(nent); !!ent; ++ent) {
     tin->GetEntry(ent);
-    const double x = std::abs(cos);
+    const double x = std::abs(cos_theta);
     // if (x>range[1]) continue;
     vals.push_back(x);
     h->Fill(x);
@@ -137,10 +136,10 @@ int main(int argc, char* argv[]) {
   // h->GetListOfFunctions()->Add(tf);
 
   write("-2LogL",LogL(pars));
-  write("c2 ",  pars[0]," #pm ",errs[0]);
-  write("c4 ",  pars[1]," #pm ",errs[1]);
-  write("c6 ",  pars[2]," #pm ",errs[2]);
-  write("phi2 ",pars[3]," #pm ",errs[3]);
+  write("c2",  pars[0]," #pm ",errs[0]);
+  write("c4",  pars[1]," #pm ",errs[1]);
+  write("c6",  pars[2]," #pm ",errs[2]);
+  write("phi2",pars[3]," #pm ",errs[3]);
 
   fout.Write(0,TObject::kOverwrite);
 }

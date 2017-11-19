@@ -2,9 +2,10 @@
 
 !.gitignore
 !Makefile
-!include/
-!src/
 !scripts/
-!note/
+!plots/
+
+!*.tex
+!*.sty
 
 **.swp

@@ -8,12 +8,18 @@
 #include "timed_counter.hh"
 #include "tc_msg.hh"
 #include "math.hh"
+#include "lorentz_vector.hh"
 
 using std::cout;
 using std::cerr;
 using std::endl;
 using namespace ivanp;
 using namespace ivanp::math;
+
+template <typename... Args>
+inline void write(const char* name, Args&&... args) {
+  TNamed(name,cat(args...).c_str()).Write();
+}
 
 int main(int argc, char* argv[]) {
   const char *ifname, *ofname;
@@ -50,24 +56,30 @@ int main(int argc, char* argv[]) {
   if (fout.IsZombie()) return 1;
   fout.cd();
 
-  TTree *tout = new TTree("cos","");
-  double cos;
-  tout->Branch("cos",&cos);
+  TTree *tout = new TTree("angles","");
+  double cos_theta;
+  tout->Branch("cos_theta",&cos_theta);
 
-  using cnt = timed_counter<Long64_t>;
-  for (cnt ent(tin->GetEntries()); !!ent; ++ent) {
-  // for (Long64_t nentries=tin->GetEntries(), i=0; i<nentries; ++i) {
+  for (timed_counter<Long64_t> ent(tin->GetEntries()); !!ent; ++ent) {
     tin->GetEntry(ent);
 
-    const double M = std::sqrt(
-      sq(E[0]+E[1]) - sq(px[0]+px[1],py[0]+py[1],pz[0]+pz[1]) );
+    const lorentz_vector pH {E[0],px[0],py[0],pz[0]},
+                         pj {E[1],px[1],py[1],pz[1]};
+    const auto Q = pH + pj;
+    const double Q2 = Q*Q;
+    const double M = sqrt(Q2);
 
     if (M < Hj_mass_range[0]) continue;
     if (Hj_mass_range[1] <= M) continue;
 
-    cos = pz[0]/std::sqrt(sq(px[0],py[0],pz[0]));
+    const lorentz_vector Z {Q.z,0,0,Q.t};
+    const auto ell = ((Q*pj)/Q2)*pH - ((Q*pH)/Q2)*pj;
+
+    cos_theta = (ell*Z) / sqrt((ell*ell)*(Z*Z));
     tout->Fill();
   }
+
+  write("M range",'[',Hj_mass_range[0],',',Hj_mass_range[1],')');
 
   fout.Write(0,TObject::kOverwrite);
 }

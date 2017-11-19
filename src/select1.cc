@@ -50,10 +50,11 @@ int main(int argc, char* argv[]) {
   tout->Branch("cos_theta",&cos_theta);
 
   std::ifstream fin(ifname);
-  timed_counter<unsigned> cnt;
-  while (
+  for (
+    timed_counter<unsigned> cnt;
     fin >> pid >> pH.x >> pH.y >> pH.z >> pH.t
-        >> pid >> pj.x >> pj.y >> pj.z >> pj.t
+        >> pid >> pj.x >> pj.y >> pj.z >> pj.t;
+    ++cnt
   ) {
     const auto Q = pH + pj;
     const double Q2 = Q*Q;
@@ -69,7 +70,6 @@ int main(int argc, char* argv[]) {
     cos_theta = (ell*Z) / sqrt((ell*ell)*(Z*Z));
 
     tout->Fill();
-    ++cnt;
   }
 
   fout.Write(0,TObject::kOverwrite);
