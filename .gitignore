@@ -1,0 +1,9 @@
+/*
+
+!.gitignore
+!Makefile
+!include/
+!src/
+!scripts/
+
+**.swp
