@@ -85,5 +85,8 @@ struct is_std_vector<std::vector<T,Alloc>>: std::true_type { };
 
 } // end namespace ivanp
 
+#include "old_type_traits.hh"
+#include "op_traits.hh"
+
 #endif
 

@@ -34,6 +34,9 @@ L_angles1 := $(ROOT_LDLIBS)
 C_angles := $(ROOT_CXXFLAGS)
 L_angles := $(ROOT_LDLIBS)
 
+C_fit1 := $(ROOT_CXXFLAGS)
+L_fit1 := $(ROOT_LDLIBS) -lMinuit
+
 C_fit := $(ROOT_CXXFLAGS)
 L_fit := $(ROOT_LDLIBS) -lMinuit
 
@@ -48,7 +51,8 @@ EXES := $(patsubst $(SRC)%$(EXT),$(BIN)%,$(shell $(GREP_EXES)))
 
 all: $(EXES)
 
-$(BIN)/angles $(BIN)/angles1 $(BIN)/fit $(BIN)/draw: $(BLD)/program_options.o
+$(BIN)/angles $(BIN)/angles1 $(BIN)/fit1 $(BIN)/fit $(BIN)/draw \
+: $(BLD)/program_options.o
 
 -include $(DEPS)
 

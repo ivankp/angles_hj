@@ -57,8 +57,9 @@ int main(int argc, char* argv[]) {
   fout.cd();
 
   TTree *tout = new TTree("angles","");
-  double cos_theta;
+  double cos_theta, y;
   tout->Branch("cos_theta",&cos_theta);
+  tout->Branch("y",&y);
 
   for (timed_counter<Long64_t> ent(tin->GetEntries()); !!ent; ++ent) {
     tin->GetEntry(ent);
@@ -75,7 +76,10 @@ int main(int argc, char* argv[]) {
     const lorentz_vector Z {Q.z,0,0,Q.t};
     const auto ell = ((Q*pj)/Q2)*pH - ((Q*pH)/Q2)*pj;
 
-    cos_theta = (ell*Z) / sqrt((ell*ell)*(Z*Z));
+    cos_theta = (ell*Z) / sqrt(sq(ell)*sq(Z));
+    // csc_cos_theta = 1./sin(M_PI*(cos_theta+0.5));
+    // csc_cos_theta = (asin(1./cos_theta)/M_PI)-0.5;
+    y = acos(cos_theta);
     tout->Fill();
   }
 

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <array>
 #include <vector>
+#include <tuple>
 
 #include <TFile.h>
 #include <TTree.h>
@@ -10,8 +11,9 @@
 #include "program_options.hh"
 #include "timed_counter.hh"
 #include "tc_msg.hh"
-#include "math.hh"
 #include "minuit.hh"
+#include "binner.hh"
+#include "math.hh"
 
 #define _STR(S) #S
 #define STR(S) _STR(S)
@@ -22,14 +24,24 @@ using std::endl;
 using namespace ivanp;
 using namespace ivanp::math;
 
-template <typename... Args>
-inline void write(const char* name, Args&&... args) {
-  TNamed(name,cat(args...).c_str()).Write();
-}
+double weight, hj_mass, cos_theta, abs_cos_theta;
+
+struct wx { double w, x; };
+struct mass_bin {
+  std::vector<wx> v;
+  TH1D * const h;
+  mass_bin(): v(), h(new TH1D("","",100,0,1)) { v.reserve(1024); }
+  inline void operator()() {
+    v.push_back({weight,abs_cos_theta});
+    h->Fill(abs_cos_theta,weight);
+  }
+  inline auto begin() const noexcept { return v.begin(); }
+  inline auto   end() const noexcept { return v.  end(); }
+};
 
 #define NPAR 4
 
-double fitf(double* x, double* c) {
+double fitf(const double* x, const double* c) {
   const double x2 = sq(*x), x4 = x2*x2, x6 = x4*x2;
 
   const double p2 = 1.5*x2 - 0.5;
@@ -46,16 +58,16 @@ double fitf(double* x, double* c) {
 
 int main(int argc, char* argv[]) {
   const char *ifname, *ofname;
-  // std::array<double,2> range {0,1};
   unsigned npar = NPAR, nbins = 100;
   std::array<double,NPAR> pars_init {0,0,0,0}, pars_lim {1,1,1,M_PI};
+  std::tuple<unsigned,double,double> hj_mass_binning;
 
   try {
     using namespace ivanp::po;
     if (program_options()
         (ifname,'i',"input file",req(),pos())
         (ofname,'o',"output file",req())
-        // (range,'r',cat("|cos_theta Θ| range [",range[0],',',range[1],']'))
+        (hj_mass_binning,'M',"Higgs+jet mass binning",req())
         (npar,'n',cat("number of fit parameters [",npar,']'))
         (pars_init,'p',"parameters' initial values")
         (pars_lim,'l',"parameters' limits")
@@ -75,71 +87,80 @@ int main(int argc, char* argv[]) {
   fin.GetObject("angles",tin);
   if (!tin) return 1;
 
-  double cos_theta;
+  tin->SetBranchAddress("weight",&weight);
+  tin->SetBranchAddress("hj_mass",&hj_mass);
   tin->SetBranchAddress("cos_theta",&cos_theta);
+
+  TH1::AddDirectory(false);
 
   TFile fout(ofname,"recreate");
   info("Output file",fout.GetName());
   if (fout.IsZombie()) return 1;
   fout.cd();
 
-  TH1D *h = new TH1D("abs_cos_theta","|cos_theta #theta|",nbins,0,1);
+  binner<mass_bin, std::tuple<
+    axis_spec<uniform_axis<double>, false, false> >
+  > hj_mass_bins(hj_mass_binning);
 
-  std::vector<double> vals;
-  const Long64_t nent = tin->GetEntries();
-  vals.reserve(nent);
-
-  for (timed_counter<Long64_t> ent(nent); !!ent; ++ent) {
+  // tree LOOP ======================================================
+  for (timed_counter<Long64_t> ent(tin->GetEntries()); !!ent; ++ent) {
     tin->GetEntry(ent);
-    const double x = std::abs(cos_theta);
-    // if (x>range[1]) continue;
-    vals.push_back(x);
-    h->Fill(x);
+    abs_cos_theta = std::abs(cos_theta);
+    hj_mass_bins(hj_mass);
   }
-  info("Number of points",vals.size());
 
-  auto LogL = [&](double* c){
-    double logl = 0.;
-    for (double x : vals) logl += std::log(fitf(&x,c));
-    return -2.*logl;
+  // Fit in mass bins ===============================================
+  auto range = [i=0u,&ax=hj_mass_bins.axis()]() mutable {
+    return ++i, cat('[',ax.lower(i),',',ax.upper(i),')');
   };
 
-  minuit<decltype(LogL)> m(NPAR,LogL);
+  for (const auto& bin : hj_mass_bins) {
+    const auto hj_mass_range = range();
+    info("Fitting hj_mass",hj_mass_range);
+    info("Events",bin.v.size());
 
-  // parameter number
-  // parameter name
-  // start value
-  // step size
-  // mininum
-  // maximum
-  m.DefineParameter(0,"c2",  pars_init[0],0.1,-pars_lim[0],pars_lim[0]);
-  m.DefineParameter(1,"c4",  pars_init[1],0.1,-pars_lim[1],pars_lim[1]);
-  m.DefineParameter(2,"c6",  pars_init[2],0.1,-pars_lim[2],pars_lim[2]);
-  m.DefineParameter(3,"phi2",pars_init[3],0.1,-pars_lim[3],pars_lim[3]);
+    bin.h->SetName(("abs_cos_theta-hj_mass"+hj_mass_range).c_str());
+    bin.h->SetTitle(("hj_mass "+hj_mass_range).c_str());
+    bin.h->SetXTitle("|cos #theta|");
+    bin.h->Write();
 
-  switch (npar) {
-    case 0: m.FixParameter(0);
-    case 1: m.FixParameter(1);
-    case 2: m.FixParameter(2);
-    case 3: m.FixParameter(3);
-    default: break;
+    auto LogL = [&v = bin.v](const double* c){
+      double logl = 0.;
+      for (const auto& e : v) logl += e.w*log(fitf(&e.x,c));
+      return -2.*logl;
+    };
+
+    minuit<decltype(LogL)> m(NPAR,LogL);
+
+    // parameter number
+    // parameter name
+    // start value
+    // step size
+    // mininum
+    // maximum
+    m.DefineParameter(0,"c2",  pars_init[0],0.1,-pars_lim[0],pars_lim[0]);
+    m.DefineParameter(1,"c4",  pars_init[1],0.1,-pars_lim[1],pars_lim[1]);
+    m.DefineParameter(2,"c6",  pars_init[2],0.1,-pars_lim[2],pars_lim[2]);
+    m.DefineParameter(3,"phi2",pars_init[3],0.1,-pars_lim[3],pars_lim[3]);
+
+    switch (npar) {
+      case 0: m.FixParameter(0);
+      case 1: m.FixParameter(1);
+      case 2: m.FixParameter(2);
+      case 3: m.FixParameter(3);
+      default: break;
+    }
+
+    m.Migrad();
+    double pars[NPAR], errs[NPAR];
+    for (unsigned i=0; i<NPAR; ++i)
+      m.GetParameter(i,pars[i],errs[i]);
+
+    TF1* fit = new TF1(("fit-hj_mass"+hj_mass_range).c_str(), fitf, 0, 1, npar);
+    fit->SetParameters(pars);
+    fit->SetParErrors(errs);
+    fit->Write();
   }
-
-  m.Migrad();
-  double pars[NPAR], errs[NPAR];
-  for (unsigned i=0; i<NPAR; ++i)
-    m.GetParameter(i,pars[i],errs[i]);
-
-  TF1* tf = new TF1("fit", fitf, 0, 1, npar);
-  tf->SetParameters(pars);
-  tf->Write();
-  // h->GetListOfFunctions()->Add(tf);
-
-  write("-2LogL",LogL(pars));
-  write("c2",  pars[0]," #pm ",errs[0]);
-  write("c4",  pars[1]," #pm ",errs[1]);
-  write("c6",  pars[2]," #pm ",errs[2]);
-  write("phi2",pars[3]," #pm ",errs[3]);
 
   fout.Write(0,TObject::kOverwrite);
 }
