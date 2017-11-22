@@ -3,7 +3,7 @@ STD := -std=c++14
 CPPFLAGS := $(STD) -Iinclude
 CXXFLAGS := $(STD) -Wall -O3 -Iinclude -fmax-errors=3
 # CXXFLAGS := $(STD) -Wall -g -Iinclude -fmax-errors=3
-LDFLAGS := $(STD) -O3
+LDFLAGS :=
 LDLIBS :=
 
 SRC := src
@@ -40,6 +40,9 @@ L_fit1 := $(ROOT_LDLIBS) -lMinuit
 C_fit := $(ROOT_CXXFLAGS)
 L_fit := $(ROOT_LDLIBS) -lMinuit
 
+C_draw1 := $(ROOT_CXXFLAGS)
+L_draw1 := $(ROOT_LDLIBS)
+
 C_draw := $(ROOT_CXXFLAGS)
 L_draw := $(ROOT_LDLIBS)
 
@@ -51,7 +54,9 @@ EXES := $(patsubst $(SRC)%$(EXT),$(BIN)%,$(shell $(GREP_EXES)))
 
 all: $(EXES)
 
-$(BIN)/angles $(BIN)/angles1 $(BIN)/fit1 $(BIN)/fit $(BIN)/draw \
+$(BIN)/angles1 $(BIN)/angles \
+$(BIN)/fit1 $(BIN)/fit \
+$(BIN)/draw1 $(BIN)/draw \
 : $(BLD)/program_options.o
 
 -include $(DEPS)

@@ -9,10 +9,9 @@
 
 namespace ivanp {
 
-template <typename T, typename... TT>
-inline void info(const T& x, const TT&... xx) {
-  using namespace termcolor;
-  std::cout << blue << bold << x << reset << ':';
+template <typename Color, typename T, typename... TT>
+inline void tc_msg(const Color& color, const T& x, const TT&... xx) {
+  std::cout << color << termcolor::bold << x << termcolor::reset << ':';
   if (sizeof...(TT)) {
     std::cout << ' ';
     detail::cat_impl(std::cout,xx...);
@@ -20,16 +19,14 @@ inline void info(const T& x, const TT&... xx) {
   std::cout << std::endl;
 }
 
-template <typename T, typename... TT>
-inline void error(const T& x, const TT&... xx) {
-  using namespace termcolor;
-  std::cerr << red << bold << x << reset << ':';
-  if (sizeof...(TT)) {
-    std::cerr << ' ';
-    detail::cat_impl(std::cerr,xx...);
-  }
-  std::cerr << std::endl;
-}
+template <typename... TT>
+inline void info(const TT&... xx) { tc_msg(termcolor::blue,xx...); }
+
+template <typename... TT>
+inline void warning(const TT&... xx) { tc_msg(termcolor::yellow,xx...); }
+
+template <typename... TT>
+inline void error(const TT&... xx) { tc_msg(termcolor::red,xx...); }
 
 }
 

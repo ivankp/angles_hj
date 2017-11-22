@@ -11,6 +11,9 @@ namespace ivanp {
 
 namespace detail {
 
+template <typename S>
+inline void cat_impl(S& s) { }
+
 template <typename S, typename T>
 inline void cat_impl(S& s, const T& t) { s << t; }
 
@@ -28,6 +31,7 @@ inline std::string cat(const TT&... tt) {
   detail::cat_impl(ss,tt...);
   return ss.str();
 }
+inline std::string cat() { return { }; }
 
 }
 
