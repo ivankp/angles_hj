@@ -39,7 +39,7 @@ double fitf(double* x, double* c) {
   const double c0 = std::sqrt(
     1. - (0.2*sq(c[0]) + (1./9.)*sq(c[1]) + (1./13.)*sq(c[2])) );
 
-  const auto phase = exp(std::polar<double>(1.,c[3]));
+  const auto phase = std::polar<double>(1.,c[3]);
 
   return norm( c0 + c[0]*phase*p2 + c[1]*p4 + c[2]*p6 );
 }

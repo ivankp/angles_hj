@@ -82,6 +82,11 @@ public:
     return axis<I>().nbins() + axis_spec<I>::nover::value;
   }
 
+  template <unsigned I=0>
+  const std::string bin_str(ivanp::axis_size_type i) const {
+    return ivanp::bin_str(std::get<I>(_axes),i);
+  }
+
   template <unsigned I> // including I
   constexpr std::enable_if_t<I!=0,size_type> nbins_left() const noexcept {
     return nbins<I>() * nbins_left<I-1>();

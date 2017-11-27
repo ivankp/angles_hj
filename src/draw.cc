@@ -64,6 +64,10 @@ int main(int argc, char* argv[]) {
   if (fin.IsZombie()) return 1;
 
   loop(&fin);
+  if (hj_mass_bins.size()==0) {
+    error("nothing to draw");
+    return 1;
+  } else info("hj_mass bins",hj_mass_bins.size());
   hj_mass_bins.sort();
 
   TCanvas canv;
@@ -78,12 +82,12 @@ int main(int argc, char* argv[]) {
     ofname = ofname.substr(0,ofname.rfind(".root"))+".pdf";
   }
   info("Output file",ofname);
-  ofname += '(';
+  if (hj_mass_bins.size()>1) ofname += '(';
   unsigned page_cnt = hj_mass_bins.size();
   bool first_page = true;
   for (const auto& bin : hj_mass_bins) {
     --page_cnt;
-    const auto& name = bin.first;
+    const std::string& name = bin.first;
 
     int fi = 0;
     double scale = 1.;
@@ -94,7 +98,7 @@ int main(int argc, char* argv[]) {
 
         // h->Scale(1./h->Integral("width")); // normalize
         h->SetLineWidth(2);
-        h->SetTitle(cat("hj_mass #in ",strchr(h->GetName(),'[')).c_str());
+        h->SetTitle(cat("hj_mass #in ",name).c_str());
 
         scale = 1./h->Integral("width");
         h->Scale(scale);
@@ -104,7 +108,7 @@ int main(int argc, char* argv[]) {
 
       } else if (p->InheritsFrom(TF1::Class())) { // TF1
         TF1 *f = static_cast<TF1*>(p);
-        TH1 *h = new TH1D("","",100,0,1);
+        TH1 *h = new TH1D("","",f->GetNpx(),f->GetXmin(),f->GetXmax());
         h->Add(f);
         h->SetLineWidth(2);
         h->SetLineColor(f->GetLineColor());
@@ -124,14 +128,14 @@ int main(int argc, char* argv[]) {
         };
         const int npar = f->GetNpar();
         for (int i=0; i<npar; ++i)
-          l(0.15+0.2*fi,0.85-0.05*i,i);
-        latex.DrawLatexNDC(0.15+0.2*fi,0.85-0.05*npar,f->GetTitle());
+          l(0.15+0.2*fi,0.85-0.04*i,i);
+        latex.DrawLatexNDC(0.15+0.2*fi,0.85-0.04*npar,f->GetTitle());
         ++fi;
       }
     }
 
-    if (!page_cnt) ofname += ')';
-    canv.Print(ofname.c_str(),("Title:"+name).c_str());
+    if (!page_cnt && !first_page) ofname += ')';
+    canv.Print(ofname.c_str(),("Title:"+std::string(name,1,name.size()-2)).c_str());
     if (first_page) ofname.pop_back(), first_page = false;
   }
 

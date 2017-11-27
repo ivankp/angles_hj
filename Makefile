@@ -40,6 +40,9 @@ L_fit1 := $(ROOT_LDLIBS) -lMinuit
 C_fit := $(ROOT_CXXFLAGS)
 L_fit := $(ROOT_LDLIBS) -lMinuit
 
+C_mc_test := $(ROOT_CXXFLAGS)
+L_mc_test := $(ROOT_LDLIBS) -lMinuit
+
 C_draw1 := $(ROOT_CXXFLAGS)
 L_draw1 := $(ROOT_LDLIBS)
 
@@ -55,7 +58,7 @@ EXES := $(patsubst $(SRC)%$(EXT),$(BIN)%,$(shell $(GREP_EXES)))
 all: $(EXES)
 
 $(BIN)/angles1 $(BIN)/angles \
-$(BIN)/fit1 $(BIN)/fit \
+$(BIN)/fit1 $(BIN)/fit $(BIN)/mc_test \
 $(BIN)/draw1 $(BIN)/draw \
 : $(BLD)/program_options.o
 

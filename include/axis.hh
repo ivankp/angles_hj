@@ -11,6 +11,7 @@
 #include <limits>
 
 #include "type_traits.hh"
+#include "catstr.hh"
 
 namespace ivanp {
 
@@ -55,7 +56,6 @@ public:
   }
 };
 
-
 // INFO =============================================================
 
 /*
@@ -66,12 +66,18 @@ public:
  * bin = nbins+1; overflow bin
  */
 
-// Abstract Axis ====================================================
+// Basic Axis =======================================================
+
+template <typename EdgeType, bool Virtual=false>
+struct basic_axis {
+  using size_type  = ivanp::axis_size_type;
+  using edge_type  = EdgeType;
+  using edge_ptype = edge_proxy<edge_type>;
+};
 
 template <typename EdgeType>
-class abstract_axis {
-public:
-  using size_type = axis_size_type;
+struct basic_axis<EdgeType,true> {
+  using size_type = ivanp::axis_size_type;
   using edge_type = EdgeType;
   using edge_ptype = edge_proxy<edge_type>;
 
@@ -90,25 +96,18 @@ public:
   virtual bool is_uniform() const = 0;
 };
 
-// Blank axis base ==================================================
-
-struct axis_base { };
-
 // Container Axis ===================================================
 
-template <typename Container, bool Inherit=false>
-class container_axis final: public std::conditional_t<Inherit,
-  abstract_axis<typename std::decay_t<Container>::value_type>,
-  axis_base>
+template <typename Container, bool Virtual=false>
+class container_axis final: public basic_axis<
+  typename std::decay_t<Container>::value_type,Virtual>
 {
 public:
-  using base_type = std::conditional_t<Inherit,
-    abstract_axis<typename std::decay_t<Container>::value_type>,
-    axis_base>;
   using container_type = Container;
-  using edge_type = typename std::decay_t<container_type>::value_type;
+  using edge_type  = typename std::decay_t<container_type>::value_type;
+  using base_type  = basic_axis<edge_type,Virtual>;
   using edge_ptype = edge_proxy<edge_type>;
-  using size_type = ivanp::axis_size_type;
+  using size_type  = ivanp::axis_size_type;
 
 private:
   container_type _edges;
@@ -204,16 +203,13 @@ public:
 
 // Uniform Axis =====================================================
 
-template <typename EdgeType, bool Inherit=false>
-class uniform_axis final: public std::conditional_t<Inherit,
-  abstract_axis<EdgeType>, axis_base>
-{
+template <typename EdgeType, bool Virtual=false>
+class uniform_axis final: public basic_axis<EdgeType,Virtual> {
 public:
-  using base_type = std::conditional_t<Inherit,
-    abstract_axis<EdgeType>, axis_base>;
-  using edge_type = EdgeType;
+  using base_type  = basic_axis<EdgeType,Virtual>;
+  using edge_type  = EdgeType;
   using edge_ptype = edge_proxy<edge_type>;
-  using size_type = ivanp::axis_size_type;
+  using size_type  = ivanp::axis_size_type;
 
 private:
   size_type _nbins;
@@ -279,17 +275,14 @@ public:
 
 // Index Axis =======================================================
 
-template <typename EdgeType = ivanp::axis_size_type, bool Inherit=false>
-class index_axis final: public std::conditional_t<Inherit,
-  abstract_axis<ivanp::axis_size_type>, axis_base>
-{
+template <typename EdgeType = ivanp::axis_size_type, bool Virtual=false>
+class index_axis final: public basic_axis<EdgeType,Virtual> {
   static_assert(std::is_integral<EdgeType>::value,"");
 public:
-  using base_type = std::conditional_t<Inherit,
-    abstract_axis<ivanp::axis_size_type>, axis_base>;
-  using edge_type = EdgeType;
+  using base_type  = basic_axis<EdgeType,Virtual>;
+  using edge_type  = EdgeType;
   using edge_ptype = edge_proxy<edge_type>;
-  using size_type = ivanp::axis_size_type;
+  using size_type  = ivanp::axis_size_type;
 
 private:
   edge_type _min, _max;
@@ -348,119 +341,115 @@ public:
 
 // Indirect Axis ====================================================
 
-template <typename EdgeType, typename Ref = const abstract_axis<EdgeType>*,
-          bool Inherit = false>
-class ref_axis final: public std::conditional_t<Inherit,
-  abstract_axis<EdgeType>, axis_base>
-{
+template <typename EdgeType, typename Ref = const basic_axis<EdgeType>*,
+          bool Virtual = false>
+class ref_axis final: public basic_axis<EdgeType,Virtual> {
 public:
-  using base_type = std::conditional_t<Inherit,
-    abstract_axis<EdgeType>, axis_base>;
-  using edge_type = EdgeType;
+  using base_type  = basic_axis<EdgeType,Virtual>;
+  using edge_type  = EdgeType;
   using edge_ptype = edge_proxy<edge_type>;
-  using size_type = ivanp::axis_size_type;
-  using axis_ref  = Ref;
+  using size_type  = ivanp::axis_size_type;
+  using axis_ref   = Ref;
 
 private:
-  axis_ref _ref;
+  axis_ref _ptr;
 
 public:
   ref_axis() = default;
   ~ref_axis() = default;
 
-  ref_axis(abstract_axis<EdgeType>* ptr): _ref(ptr) { }
-
-  ref_axis(axis_ref ref): _ref(ref) { }
+  ref_axis(axis_ref ref): _ptr(ref) { }
   ref_axis& operator=(axis_ref ref) {
-    _ref = ref;
+    _ptr = ref;
     return *this;
   }
-  ref_axis(const ref_axis& axis): _ref(axis._ref) { }
-  ref_axis(ref_axis&& axis): _ref(std::move(axis._ref)) { }
+  ref_axis(const ref_axis& axis): _ptr(axis._ptr) { }
+  ref_axis(ref_axis&& axis): _ptr(std::move(axis._ptr)) { }
   ref_axis& operator=(const ref_axis& axis) {
-    _ref = axis._ref;
+    _ptr = axis._ptr;
     return *this;
   }
   ref_axis& operator=(ref_axis&& axis) {
-    _ref = std::move(axis._ref);
+    _ptr = std::move(axis._ptr);
     return *this;
   }
 
-  inline size_type nedges() const { return _ref->nedges(); }
-  inline size_type nbins () const { return _ref->nbins (); }
+  inline size_type nedges() const { return _ptr->nedges(); }
+  inline size_type nbins () const { return _ptr->nbins (); }
 
-  inline size_type vfind_bin (edge_type x) const { return _ref->vfind_bin(x); }
-  inline size_type  find_bin (edge_type x) const { return _ref->vfind_bin(x); }
-  inline size_type operator[](edge_type x) const { return _ref->vfind_bin(x); }
+  inline size_type vfind_bin (edge_type x) const { return _ptr->vfind_bin(x); }
+  inline size_type  find_bin (edge_type x) const { return _ptr->vfind_bin(x); }
+  inline size_type operator[](edge_type x) const { return _ptr->vfind_bin(x); }
 
-  inline edge_type edge(size_type i) const { return _ref->edge(i); }
-  inline edge_type min() const { return _ref->min(); }
-  inline edge_type max() const { return _ref->max(); }
-  inline edge_ptype lower(size_type i) const { return _ref->lower(i); }
-  inline edge_ptype upper(size_type i) const { return _ref->upper(i); }
+  inline edge_type edge(size_type i) const { return _ptr->edge(i); }
+  inline edge_type min() const { return _ptr->min(); }
+  inline edge_type max() const { return _ptr->max(); }
+  inline edge_ptype lower(size_type i) const { return _ptr->lower(i); }
+  inline edge_ptype upper(size_type i) const { return _ptr->upper(i); }
 
-  inline bool is_uniform() const noexcept { return _ref->is_uniform(); }
+  inline bool is_uniform() const noexcept { return _ptr->is_uniform(); }
 
 };
 
 // Factory functions ================================================
 
 template <typename A, typename B, typename EdgeType = std::common_type_t<A,B>>
-inline decltype(auto) make_axis(axis_size_type nbins, A min, B max) {
-  return uniform_axis<EdgeType>(nbins,min,max);
+inline auto make_axis(axis_size_type nbins, A min, B max)
+-> uniform_axis<EdgeType> {
+  return { nbins,min,max };
 }
 
 template <typename T, size_t N>
-inline decltype(auto) make_axis(const std::array<T,N>& edges) {
-  return container_axis<std::array<T,N>>(edges);
+inline auto make_axis(const std::array<T,N>& edges)
+-> container_axis<std::array<T,N>> {
+  return { edges };
 }
 
 template <typename EdgeType>
-inline decltype(auto) make_unique_axis(const abstract_axis<EdgeType>* axis) {
-  return ref_axis<EdgeType,std::unique_ptr<abstract_axis<EdgeType>>>(axis);
+inline auto make_unique_axis(const basic_axis<EdgeType>* axis)
+-> ref_axis<EdgeType,std::unique_ptr<basic_axis<EdgeType>>>{
+  return { axis };
 }
 
 template <typename EdgeType>
-inline decltype(auto) make_shared_axis(const abstract_axis<EdgeType>* axis) {
-  return ref_axis<EdgeType,std::shared_ptr<abstract_axis<EdgeType>>>(axis);
+inline auto make_shared_axis(const basic_axis<EdgeType>* axis)
+-> ref_axis<EdgeType,std::shared_ptr<basic_axis<EdgeType>>>{
+  return { axis };
 }
 
 template <typename A, typename B, typename EdgeType = std::common_type_t<A,B>>
-inline decltype(auto) make_unique_axis(axis_size_type nbins, A min, B max) {
-  return ref_axis<EdgeType,std::unique_ptr<abstract_axis<EdgeType>>>(
-    std::make_unique<uniform_axis<EdgeType>>(nbins,min,max) );
+inline auto make_unique_axis(axis_size_type nbins, A min, B max)
+-> ref_axis<EdgeType,std::unique_ptr<basic_axis<EdgeType>>> {
+  return { std::make_unique<uniform_axis<EdgeType>>(nbins,min,max) };
 }
 
 template <typename A, typename B, typename EdgeType = std::common_type_t<A,B>>
-inline decltype(auto) make_shared_axis(axis_size_type nbins, A min, B max) {
-  return ref_axis<EdgeType,std::shared_ptr<abstract_axis<EdgeType>>>(
-    std::make_shared<uniform_axis<EdgeType>>(nbins,min,max) );
+inline auto make_shared_axis(axis_size_type nbins, A min, B max)
+-> ref_axis<EdgeType,std::shared_ptr<basic_axis<EdgeType>>> {
+  return { std::make_shared<uniform_axis<EdgeType>>(nbins,min,max) };
 }
 
 template <typename T, size_t N>
-inline decltype(auto) make_unique_axis(const std::array<T,N>& edges) {
-  return ref_axis<T,std::unique_ptr<abstract_axis<T>>>(
-    std::make_unique<uniform_axis<T>>(edges) );
+inline auto make_unique_axis(const std::array<T,N>& edges)
+-> ref_axis<T,std::unique_ptr<basic_axis<T>>> {
+  return { std::make_unique<uniform_axis<T>>(edges) };
 }
 
 template <typename T, size_t N>
-inline decltype(auto) make_shared_axis(const std::array<T,N>& edges) {
-  return ref_axis<T,std::shared_ptr<abstract_axis<T>>>(
-    std::make_shared<uniform_axis<T>>(edges) );
+inline auto make_shared_axis(const std::array<T,N>& edges)
+-> ref_axis<T,std::shared_ptr<basic_axis<T>>> {
+  return { std::make_shared<uniform_axis<T>>(edges) };
 }
 
 // Constexpr Axis ===================================================
 
-template <typename EdgeType, bool Inherit=false>
-class const_axis final: public std::conditional_t<Inherit,
-  abstract_axis<EdgeType>, axis_base>
-{
+template <typename EdgeType, bool Virtual=false>
+class const_axis final: public basic_axis<EdgeType,Virtual> {
 public:
-  using base_type = std::conditional_t<Inherit,
-    abstract_axis<EdgeType>, axis_base>;
-  using edge_type = EdgeType;
+  using base_type  = basic_axis<EdgeType,Virtual>;
+  using edge_type  = EdgeType;
   using edge_ptype = edge_proxy<edge_type>;
-  using size_type = ivanp::axis_size_type;
+  using size_type  = ivanp::axis_size_type;
 
 private:
   const edge_type* _edges;
@@ -514,7 +503,12 @@ public:
 
 };
 
-// ==================================================================
+// Non-member functions =============================================
+
+template <typename Axis>
+inline std::string bin_str(const Axis& a, axis_size_type i) {
+  return cat('[',a.lower(i),',',a.upper(i),')');
+}
 
 template <typename T, typename Axis>
 auto vector_of_edges(const Axis& axis) {
@@ -525,6 +519,8 @@ auto vector_of_edges(const Axis& axis) {
     edges.emplace_back(axis.edge(i));
   return edges;
 }
+
+// ==================================================================
 
 } // end namespace ivanp
 
