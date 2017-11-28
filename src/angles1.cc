@@ -27,15 +27,13 @@ inline void write(const char* name, Args&&... args) {
 
 int main(int argc, char* argv[]) {
   const char *ifname, *ofname;
-  std::array<double,2> Hj_mass_range;
 
   try {
     using namespace ivanp::po;
     if (program_options()
-        (ifname,'i',"input file",req(),pos())
-        (ofname,'o',"output file",req())
-        (Hj_mass_range,{"-m","--mass"},"Hj mass range",req())
-        .parse(argc,argv,true)) return 0;
+      (ifname,'i',"input file",req(),pos())
+      (ofname,'o',"output file",req())
+      .parse(argc,argv,true)) return 0;
   } catch (const std::exception& e) {
     cerr << e << endl;
     return 1;
@@ -51,9 +49,12 @@ int main(int argc, char* argv[]) {
   fout.cd();
 
   TTree *tout = new TTree("angles","");
-  double cos_theta;
+  double hj_mass, cos_theta;
+  tout->Branch("hj_mass",&hj_mass);
   tout->Branch("cos_theta",&cos_theta);
 
+  info("Input file",ifname);
+  write("Input file",ifname);
   std::ifstream fin(ifname);
   for (
     timed_counter<unsigned> cnt;
@@ -63,21 +64,17 @@ int main(int argc, char* argv[]) {
   ) {
     const auto Q = pH + pj;
     const double Q2 = Q*Q;
-    const double M = sqrt(Q2);
+    hj_mass = sqrt(Q2);
 
-    if (M < Hj_mass_range[0]) continue;
-    if (Hj_mass_range[1] <= M) continue;
-
-    // const auto Z   = ((Q*p2)/Q2)*p1 - ((Q*p1)/Q2)*p2;
+    // const auto Z = ((Q*p2)/Q2)*p1 - ((Q*p1)/Q2)*p2;
     const lorentz_vector Z {Q.z,0,0,Q.t};
     const auto ell = ((Q*pj)/Q2)*pH - ((Q*pH)/Q2)*pj;
 
-    cos_theta = (ell*Z) / sqrt((ell*ell)*(Z*Z));
+    cos_theta = (ell*Z) / sqrt(sq(ell)*sq(Z));
 
     tout->Fill();
   }
 
-  write("M range",'[',Hj_mass_range[0],',',Hj_mass_range[1],')');
-
+  info("Saving",fout.GetName());
   fout.Write(0,TObject::kOverwrite);
 }

@@ -37,8 +37,8 @@ L_angles := $(ROOT_LDLIBS)
 C_fit1 := $(ROOT_CXXFLAGS)
 L_fit1 := $(ROOT_LDLIBS) -lMinuit
 
-C_fit := $(ROOT_CXXFLAGS)
-L_fit := $(ROOT_LDLIBS) -lMinuit
+C_fit := -fopenmp $(ROOT_CXXFLAGS)
+L_fit := -fopenmp $(ROOT_LDLIBS) -lMinuit
 
 C_mc_test := $(ROOT_CXXFLAGS)
 L_mc_test := $(ROOT_LDLIBS) -lMinuit

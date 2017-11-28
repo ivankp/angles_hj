@@ -40,10 +40,18 @@ constexpr bool eq(const T& x1, const T& x, const TT&... xx) noexcept {
 // return absolute value of phi separation
 [[ gnu::const ]]
 inline double dphi(double phi1, double phi2) noexcept {
-  static constexpr double twopi = M_PI*2;
   double _dphi = phi1 - phi2;
   if (__builtin_expect(_dphi < 0.,0)) _dphi = -_dphi;
-  return ( __builtin_expect(_dphi > M_PI,0) ? twopi-_dphi : _dphi );
+  return ( __builtin_expect(_dphi > M_PI,0) ? (2*M_PI)-_dphi : _dphi );
+}
+
+inline void mod_phi_ref(double& x) noexcept { // φ on [-π,+π]
+  x = fmod(x+M_PI,2*M_PI);
+  x += (x<0 ? M_PI : -M_PI);
+}
+inline double mod_phi(double x) noexcept { // φ on [-π,+π]
+  mod_phi_ref(x);
+  return x;
 }
 
 [[ gnu::const ]]

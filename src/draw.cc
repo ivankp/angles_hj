@@ -43,7 +43,7 @@ void loop(TDirectory* dir) { // LOOP
 
 int main(int argc, char* argv[]) {
   std::string ifname, ofname;
-  bool logy = false;
+  bool logy = false, more_logy = false;
   boost::optional<std::array<double,2>> y_range;
 
   try {
@@ -52,6 +52,7 @@ int main(int argc, char* argv[]) {
         (ifname,'i',"input file",req(),pos())
         (ofname,'o',"output file")
         (y_range,'y',"y-axis range")
+        (more_logy,"--more-logy","more y-axis log labels")
         (logy,"--logy")
         .parse(argc,argv,true)) return 0;
   } catch (const std::exception& e) {
@@ -103,8 +104,11 @@ int main(int argc, char* argv[]) {
         scale = 1./h->Integral("width");
         h->Scale(scale);
 
-        if (y_range) h->GetYaxis()->SetRangeUser((*y_range)[0],(*y_range)[1]);
+        auto* ya = h->GetYaxis();
+        if (y_range) ya->SetRangeUser((*y_range)[0],(*y_range)[1]);
+        if (more_logy) ya->SetMoreLogLabels();
         h->Draw();
+        latex.DrawLatexNDC(0.70,0.85,cat("Events: ",h->GetEntries()).c_str());
 
       } else if (p->InheritsFrom(TF1::Class())) { // TF1
         TF1 *f = static_cast<TF1*>(p);
@@ -129,7 +133,9 @@ int main(int argc, char* argv[]) {
         const int npar = f->GetNpar();
         for (int i=0; i<npar; ++i)
           l(0.15+0.2*fi,0.85-0.04*i,i);
+        latex.SetTextColor(f->GetLineColor());
         latex.DrawLatexNDC(0.15+0.2*fi,0.85-0.04*npar,f->GetTitle());
+        latex.SetTextColor(1);
         ++fi;
       }
     }
