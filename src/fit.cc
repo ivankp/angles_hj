@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
         (ofname,'o',"output file",req())
         (hj_mass_binning,'M',"Higgs+jet mass binning",req())
         (npar,'n',cat("number of fit parameters [",npar,']'))
-        (fit_range,'r',cat("max |cos θ| fit range [",fit_range,']'))
+        (fit_range,'r',cat("max cosθ fit range [",fit_range,']'))
         (pars_init,'p',"parameters' initial values")
         (pars_lim,'l',"parameters' limits")
         (use_chi2_pars,"--use-chi2-pars")
@@ -118,18 +118,20 @@ int main(int argc, char* argv[]) {
   }
 
   // Fit in mass bins ===============================================
-  TF1 *fit = new TF1("fit",Legendre,-1.,1.,npar);
+  TF1 *fit = new TF1("fit-logl",Legendre,-1.,1.,npar);
   // fit->SetNpx(nbins);
   for (unsigned i=0; i<NPAR; ++i)
     fit->SetParName(i,pars_names[i]);
 
-  TF1 *fit2 = new TF1("fit2",
+  TF1 *fit2 = new TF1("fit-chi2",
     [](const double* x, const double* c){ return c[0]*Legendre(x,c+1); },
     -1.,1.,npar+1);
   // fit2->SetNpx(nbins);
   fit2->SetParName(0,"A");
   for (unsigned i=0; i<NPAR; ++i)
     fit2->SetParName(i+1,pars_names[i]);
+
+  double pars[NPAR], errs[NPAR];
 
   for (const auto& bin : hj_mass_bins) {
     static unsigned bin_i = 0;
@@ -139,16 +141,28 @@ int main(int argc, char* argv[]) {
 
     bin.h->SetName(("cos_theta-hj_mass"+hj_mass_bin).c_str());
     bin.h->SetTitle(("hj_mass "+hj_mass_bin).c_str());
-    bin.h->SetXTitle("|cos #theta|");
+    bin.h->SetXTitle(cat("cos #theta / ",fit_range).c_str());
     bin.h->Write();
+
+    auto LogL = [=,&v=bin.v](const double* c){
+      double logl = 0.;
+      const unsigned n = v.size();
+      #pragma omp parallel for reduction(+:logl)
+      for (unsigned i=0; i<n; ++i)
+        logl += v[i].w*log(Legendre(&v[i].x,c));
+      return -2.*logl;
+    };
 
     info("χ² fit");
     fit2->SetParameter(0,bin.h->Integral(1,bin.h->GetNbinsX()+1));
     for (unsigned i=0; i<NPAR; ++i)
       fit2->SetParameter(i+1,pars_init[i]);
     auto result = bin.h->Fit(fit2,"S","",-1.,1.);
-    fit2->SetLineColor(8);
-    fit2->SetTitle(cat("#chi^{2} = ",result->Chi2()).c_str());
+    fit2->SetLineColor(418);
+    fit2->SetTitle(cat(
+        "#chi^{2} = ",result->Chi2(),","
+        "-2LogL = ",LogL(fit2->GetParameters()+1)
+      ).c_str());
     fit2->SetName(("fit-chi2-hj_mass"+hj_mass_bin).c_str());
     fit2->Write();
     fit2->SetName("fit2");
@@ -160,16 +174,6 @@ int main(int argc, char* argv[]) {
     }
 
     info("LogL fit");
-    auto LogL = [=,&v=bin.v](const double* c){
-      double logl = 0.;
-      // for (const auto& e : v)
-      const unsigned n = v.size();
-      #pragma omp parallel for reduction(+:logl)
-      for (unsigned i=0; i<n; ++i)
-        logl += v[i].w*log(Legendre(&v[i].x,c));
-      return -2.*logl;
-    };
-
     minuit<decltype(LogL)> m(NPAR,LogL);
     m.SetPrintLevel(print_level);
 
@@ -192,7 +196,6 @@ int main(int argc, char* argv[]) {
     }
 
     m.Migrad();
-    double pars[NPAR], errs[NPAR];
     for (unsigned i=0; i<NPAR; ++i)
       m.GetParameter(i,pars[i],errs[i]);
 

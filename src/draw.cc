@@ -41,6 +41,20 @@ void loop(TDirectory* dir) { // LOOP
   }
 }
 
+std::vector<std::string> split(const char* str, char d) {
+  std::vector<std::string> tok;
+  unsigned i = 0;
+  for (char c; (c=str[i])!='\0'; ++i) {
+    if (c==d) {
+      tok.emplace_back(str,i);
+      str += i+1;
+      i = 0;
+    }
+  }
+  tok.emplace_back(str,i);
+  return tok;
+}
+
 int main(int argc, char* argv[]) {
   std::string ifname, ofname;
   bool logy = false, more_logy = false;
@@ -131,11 +145,20 @@ int main(int argc, char* argv[]) {
             ).c_str());
         };
         const int npar = f->GetNpar();
-        for (int i=0; i<npar; ++i)
-          l(0.15+0.2*fi,0.85-0.04*i,i);
-        latex.SetTextColor(f->GetLineColor());
-        latex.DrawLatexNDC(0.15+0.2*fi,0.85-0.04*npar,f->GetTitle());
-        latex.SetTextColor(1);
+        int line = 0;
+        for (; line<npar; ++line)
+          l(0.15+0.2*fi,0.85-0.04*line,line);
+        bool first = true;
+        for (const auto& str : split(f->GetTitle(),',')) {
+          if (first)
+            latex.SetTextColor(f->GetLineColor());
+          latex.DrawLatexNDC(0.15+0.2*fi,0.85-0.04*line,str.c_str());
+          if (first) {
+            latex.SetTextColor(1);
+            first = false;
+          }
+          ++line;
+        }
         ++fi;
       }
     }
