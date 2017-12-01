@@ -58,19 +58,20 @@ public:
     if (emp.second) order.push_back(emp.first);
     return emp.first->second;
   }
-  const auto& operator[](const Key& key) const {
+  const T& operator[](const Key& key) const {
     try {
       return map.at(key);
     } catch (const std::out_of_range&) {
       throw ivanp::error("no key \"",key,'\"');
     }
   }
-  template <typename... Args>
-  inline bool emplace(Args&&... args) {
+  template <typename... Args1, typename... Args2>
+  inline bool emplace(
+    std::tuple<Args1...>&& args1, std::tuple<Args2...>&& args2={}
+  ) {
     auto emp = map.emplace(
       std::piecewise_construct,
-      std::forward_as_tuple(std::forward<Args>(args)...),
-      std::forward_as_tuple());
+      std::move(args1), std::move(args2));
     if (emp.second) order.push_back(emp.first);
     return emp.second;
   }

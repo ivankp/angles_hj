@@ -49,6 +49,12 @@ L_draw1 := $(ROOT_LDLIBS)
 C_draw := $(ROOT_CXXFLAGS)
 L_draw := $(ROOT_LDLIBS)
 
+C_pars := $(ROOT_CXXFLAGS)
+L_pars := $(ROOT_LDLIBS)
+
+C_llr := $(ROOT_CXXFLAGS)
+L_llr := $(ROOT_LDLIBS)
+
 SRCS := $(shell find $(SRC) -type f -name '*$(EXT)')
 DEPS := $(patsubst $(SRC)/%$(EXT),$(BLD)/%.d,$(SRCS))
 
@@ -59,7 +65,7 @@ all: $(EXES)
 
 $(BIN)/angles1 $(BIN)/angles \
 $(BIN)/fit1 $(BIN)/fit $(BIN)/mc_test \
-$(BIN)/draw1 $(BIN)/draw \
+$(BIN)/draw1 $(BIN)/draw $(BIN)/pars $(BIN)/llr \
 : $(BLD)/program_options.o
 
 -include $(DEPS)

@@ -57,4 +57,9 @@ inline const TClass* get_class(const TKey& key) {
   return get_class(key.GetClassName());
 }
 
+template <typename T>
+inline bool inherits_from(const TClass* c) {
+  return c->InheritsFrom(T::Class());
+}
+
 #endif

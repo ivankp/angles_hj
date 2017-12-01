@@ -63,12 +63,12 @@ int main(int argc, char* argv[]) {
   try {
     using namespace ivanp::po;
     if (program_options()
-        (ifname,'i',"input file",req(),pos())
-        (ofname,'o',"output file")
-        (y_range,'y',"y-axis range")
-        (more_logy,"--more-logy","more y-axis log labels")
-        (logy,"--logy")
-        .parse(argc,argv,true)) return 0;
+      (ifname,'i',"input file",req(),pos())
+      (ofname,'o',"output file")
+      (y_range,'y',"y-axis range")
+      (more_logy,"--more-logy","more y-axis log labels")
+      (logy,"--logy")
+      .parse(argc,argv,true)) return 0;
   } catch (const std::exception& e) {
     cerr << e << endl;
     return 1;
