@@ -2,6 +2,7 @@
 
 !.gitignore
 !Makefile
+!README*
 !include/
 !src/
 !scripts/
