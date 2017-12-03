@@ -11,7 +11,7 @@ while getopts 'fu' flag; do
   esac
 done
 
-for r in 5 9
+for r in 8
 do
 
 all_fits=()
@@ -26,6 +26,7 @@ else
   suf=full
   case "$r" in
     5) y="0.35:0.8" ;;
+    8) y="0.25:1.25" ;;
     *) y="0:2" ;;
   esac
 fi
@@ -39,7 +40,7 @@ if $do_fit; then
       -M 12:250:550 -n${p} -r 0.${r} --use-chi2-pars -l 2:2:2
   else
     ./bin/fit ../bh_analysis2/H1j_angles.root -o $fits \
-      -M 12:250:550 -n${p} -r 0.${r} --use-chi2-pars -l 2:2:2
+      -M 12:250:550 -n${p} -r 0.${r} --use-chi2-pars --nbins=50
       # -M 30:250:550 -n${p} -r 0.${r} --use-chi2-pars
   fi
 fi

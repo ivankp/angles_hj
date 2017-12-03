@@ -11,6 +11,7 @@
 #include <TCanvas.h>
 #include <TStyle.h>
 #include <TLatex.h>
+#include <TLine.h>
 
 #include "program_options.hh"
 #include "tc_msg.hh"
@@ -85,9 +86,14 @@ int main(int argc, char* argv[]) {
   } else info("hj_mass bins",hj_mass_bins.size());
   hj_mass_bins.sort();
 
-  TCanvas canv;
+  TCanvas canv("","",700,600);
   if (logy) canv.SetLogy();
   gStyle->SetOptStat(0);
+
+  TPad *pad1 = new TPad("","",0,0.25,1,1);
+  pad1->SetMargin(0.05,0.05,0,0.1);
+  TPad *pad2 = new TPad("","",0,0,1,0.25);
+  pad2->SetMargin(0.05,0.05,0.25,0);
 
   TLatex latex;
   latex.SetTextSize(0.025);
@@ -100,6 +106,7 @@ int main(int argc, char* argv[]) {
   if (hj_mass_bins.size()>1) ofname += '(';
   unsigned page_cnt = hj_mass_bins.size();
   bool first_page = true;
+  TH1 *h_mc = nullptr, *h_fit = nullptr;
   for (const auto& bin : hj_mass_bins) {
     --page_cnt;
     const std::string& name = bin.first;
@@ -107,6 +114,7 @@ int main(int argc, char* argv[]) {
     int fi = 0;
     double scale = 1.;
 
+    pad1->cd();
     for (auto* p : bin.second) {
       if (p->InheritsFrom(TH1::Class())) { // HIST
         TH1 *h = static_cast<TH1*>(p);
@@ -117,6 +125,8 @@ int main(int argc, char* argv[]) {
 
         scale = 1./h->Integral("width");
         h->Scale(scale);
+        h_mc = static_cast<TH1*>(h->Clone());
+        h->SetXTitle("");
 
         auto* ya = h->GetYaxis();
         if (y_range) ya->SetRangeUser((*y_range)[0],(*y_range)[1]);
@@ -133,6 +143,7 @@ int main(int argc, char* argv[]) {
 
         if (strstr(f->GetName(),"-logl-")) {
           h->Scale(1./h->Integral("width"));
+          h_fit = static_cast<TH1*>(h->Clone());
         } else {
           h->Scale(scale);
         }
@@ -162,6 +173,29 @@ int main(int argc, char* argv[]) {
         ++fi;
       }
     }
+
+    pad2->cd();
+    h_mc->SetTitle("");
+    h_fit->SetTitle("");
+    TAxis *ax = h_mc->GetXaxis();
+    TAxis *ay = h_mc->GetYaxis();
+    ax->SetLabelSize(0.1);
+    ay->SetLabelSize(0.1);
+    ax->SetTitleSize(0.1);
+    ax->SetTickLength(0.09);
+    ay->SetTickLength(0.02);
+    const int factor = h_fit->GetNbinsX()/h_mc->GetNbinsX();
+    h_fit->Rebin(factor);
+    h_fit->Scale(1./factor);
+    h_mc->Divide(h_fit);
+    ay->SetRangeUser(0.95,1.05);
+    h_mc->Draw();
+    static TLine line1(-1,1,1,1);
+    line1.Draw();
+
+    canv.cd();
+    pad1->Draw();
+    pad2->Draw();
 
     if (!page_cnt && !first_page) ofname += ')';
     canv.Print(ofname.c_str(),("Title:"+std::string(name,1,name.size()-2)).c_str());
