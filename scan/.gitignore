@@ -1,0 +1,9 @@
+/*
+
+!.gitignore
+!run.sh
+!scan.condor
+!scan.dag
+!scan.py
+
+**.swp

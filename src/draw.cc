@@ -26,18 +26,16 @@ using std::cerr;
 using std::endl;
 using namespace ivanp;
 
-ordered_map<std::vector<TObject*>> hj_mass_bins;
+ordered_map<TH1*> hj_mass_bins;
 
 void loop(TDirectory* dir) { // LOOP
   for (TKey& key : get_keys(dir)) {
     const TClass* key_class = get_class(key);
-    if (
-      key_class->InheritsFrom(TH1::Class()) ||
-      key_class->InheritsFrom(TF1::Class())
-    ) {
-      hj_mass_bins[strchr(key.GetName(),'[')].push_back(key.ReadObj());
-    } else if (key_class->InheritsFrom(TDirectory::Class())) { // DIR
-      loop(read_key<TDirectory>(key));
+    if (inherits_from<TH1>(key_class)) {
+      hj_mass_bins[strchr(key.GetName(),'[')]
+        = key_cast<TH1>(key);
+    } else if (inherits_from<TDirectory>(key_class)) { // DIR
+      loop(key_cast<TDirectory>(key));
     }
   }
 }
@@ -90,10 +88,10 @@ int main(int argc, char* argv[]) {
   if (logy) canv.SetLogy();
   gStyle->SetOptStat(0);
 
-  TPad *pad1 = new TPad("","",0,0.25,1,1);
-  pad1->SetMargin(0.05,0.05,0,0.1);
-  TPad *pad2 = new TPad("","",0,0,1,0.25);
-  pad2->SetMargin(0.05,0.05,0.25,0);
+  TPad pad1("","",0,0.25,1,1);
+  pad1.SetMargin(0.05,0.05,0,0.1);
+  TPad pad2("","",0,0,1,0.25);
+  pad2.SetMargin(0.05,0.05,0.25,0);
 
   TLatex latex;
   latex.SetTextSize(0.025);
@@ -111,73 +109,72 @@ int main(int argc, char* argv[]) {
     --page_cnt;
     const std::string& name = bin.first;
 
+    pad1.cd();
+
+    TH1 *h = bin.second;
+    h->SetLineWidth(2);
+    h->SetTitle(cat("hj_mass #in ",name).c_str());
+
+    const double scale = 1./h->Integral("width");
+    h->Scale(scale);
+    TAxis *ax = h->GetXaxis();
+    h_mc = new TH1D("","",h->GetNbinsX(),ax->GetXmin(),ax->GetXmax());
+    h_mc->Add(h);
+    h_mc->SetXTitle(ax->GetTitle());
+    h->SetXTitle("");
+
+    TAxis* ya = h->GetYaxis();
+    if (y_range) ya->SetRangeUser((*y_range)[0],(*y_range)[1]);
+    if (more_logy) ya->SetMoreLogLabels();
+    h->Draw();
+    latex.DrawLatexNDC(0.70,0.85,cat("Events: ",h->GetEntries()).c_str());
+
     int fi = 0;
-    double scale = 1.;
+    for (TF1& f : list_cast<TF1>(h->GetListOfFunctions())) {
+      TH1 *h = new TH1D("","",f.GetNpx(),f.GetXmin(),f.GetXmax());
+      h->Add(&f);
+      h->SetLineWidth(2);
+      h->SetLineColor(f.GetLineColor());
 
-    pad1->cd();
-    for (auto* p : bin.second) {
-      if (p->InheritsFrom(TH1::Class())) { // HIST
-        TH1 *h = static_cast<TH1*>(p);
-
-        // h->Scale(1./h->Integral("width")); // normalize
-        h->SetLineWidth(2);
-        h->SetTitle(cat("hj_mass #in ",name).c_str());
-
-        scale = 1./h->Integral("width");
+      if (strstr(f.GetName(),"-logl")) {
+        h->Scale(1./h->Integral("width"));
+        h_fit = static_cast<TH1*>(h->Clone());
+      } else {
         h->Scale(scale);
-        h_mc = static_cast<TH1*>(h->Clone());
-        h->SetXTitle("");
-
-        auto* ya = h->GetYaxis();
-        if (y_range) ya->SetRangeUser((*y_range)[0],(*y_range)[1]);
-        if (more_logy) ya->SetMoreLogLabels();
-        h->Draw();
-        latex.DrawLatexNDC(0.70,0.85,cat("Events: ",h->GetEntries()).c_str());
-
-      } else if (p->InheritsFrom(TF1::Class())) { // TF1
-        TF1 *f = static_cast<TF1*>(p);
-        TH1 *h = new TH1D("","",f->GetNpx(),f->GetXmin(),f->GetXmax());
-        h->Add(f);
-        h->SetLineWidth(2);
-        h->SetLineColor(f->GetLineColor());
-
-        if (strstr(f->GetName(),"-logl-")) {
-          h->Scale(1./h->Integral("width"));
-          h_fit = static_cast<TH1*>(h->Clone());
-        } else {
-          h->Scale(scale);
-        }
-
-        h->Draw("C SAME");
-
-        auto l = [&](double x, double y, int i){
-          latex.DrawLatexNDC(x,y,cat(
-              f->GetParName(i)," = ",f->GetParameter(i)
-            ).c_str());
-        };
-        const int npar = f->GetNpar();
-        int line = 0;
-        for (; line<npar; ++line)
-          l(0.15+0.2*fi,0.85-0.04*line,line);
-        bool first = true;
-        for (const auto& str : split(f->GetTitle(),',')) {
-          if (first)
-            latex.SetTextColor(f->GetLineColor());
-          latex.DrawLatexNDC(0.15+0.2*fi,0.85-0.04*line,str.c_str());
-          if (first) {
-            latex.SetTextColor(1);
-            first = false;
-          }
-          ++line;
-        }
-        ++fi;
       }
+
+      h->Draw("C SAME");
+
+      auto l = [&](double x, double y, int i){
+        double a, b;
+        f.GetParLimits(i,a,b);
+        latex.DrawLatexNDC(x,y,cat(
+            f.GetParName(i)," = ",f.GetParameter(i),
+            (a*b!=0 && a>=b) ? " FIXED" : ""
+          ).c_str());
+      };
+      const int npar = f.GetNpar();
+      int line = 0;
+      for (; line<npar; ++line)
+        l(0.15+0.2*fi,0.85-0.04*line,line);
+      bool first = true;
+      for (const auto& str : split(f.GetTitle(),',')) {
+        if (first)
+          latex.SetTextColor(f.GetLineColor());
+        latex.DrawLatexNDC(0.15+0.2*fi,0.85-0.04*line,str.c_str());
+        if (first) {
+          latex.SetTextColor(1);
+          first = false;
+        }
+        ++line;
+      }
+      ++fi;
     }
 
-    pad2->cd();
+    pad2.cd();
     h_mc->SetTitle("");
     h_fit->SetTitle("");
-    TAxis *ax = h_mc->GetXaxis();
+    ax = h_mc->GetXaxis();
     TAxis *ay = h_mc->GetYaxis();
     ax->SetLabelSize(0.1);
     ay->SetLabelSize(0.1);
@@ -194,12 +191,15 @@ int main(int argc, char* argv[]) {
     line1.Draw();
 
     canv.cd();
-    pad1->Draw();
-    pad2->Draw();
+    pad1.Draw();
+    pad2.Draw();
 
     if (!page_cnt && !first_page) ofname += ')';
     canv.Print(ofname.c_str(),("Title:"+std::string(name,1,name.size()-2)).c_str());
     if (first_page) ofname.pop_back(), first_page = false;
+
+    delete h_mc;
+    delete h_fit;
   }
 
 }

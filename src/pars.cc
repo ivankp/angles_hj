@@ -26,16 +26,18 @@ void loop(TDirectory* dir) { // LOOP
   for (TKey& key : get_keys(dir)) {
     const TClass* key_class = get_class(key);
     const char* key_name = key.GetName();
-    if (inherits_from<TF1>(key_class)) { // TF1
-      if (!strstr(key_name,"-logl-")) continue;
-      TEST(key_name)
+    if (inherits_from<TH1>(key_class)) { // TH1
       const char* bin1 = strchr(key_name,'[');
       const char* bin2 = strchr(bin1+1,')');
+      for (TObject* obj : *key_cast<TH1>(key)->GetListOfFunctions()) {
+        if (!obj->InheritsFrom(TF1::Class())) continue;
+        if (!strstr(obj->GetName(),"-logl")) continue;
 
-      hj_mass_bins[std::string(bin1,bin2-bin1+1)] = read_key<TF1>(key);
-
+        hj_mass_bins[std::string(bin1,bin2-bin1+1)] =
+          static_cast<TF1*>(obj);
+      }
     } else if (inherits_from<TDirectory>(key_class)) { // DIR
-      loop(read_key<TDirectory>(key));
+      loop(key_cast<TDirectory>(key));
     }
   }
 }

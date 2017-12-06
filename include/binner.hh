@@ -84,7 +84,7 @@ public:
 
   template <unsigned I=0>
   const std::string bin_str(ivanp::axis_size_type i) const {
-    return ivanp::bin_str(std::get<I>(_axes),i);
+    return ivanp::bin_str(axis<I>(),i);
   }
 
   template <unsigned I> // including I

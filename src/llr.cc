@@ -27,16 +27,19 @@ void loop(TDirectory* dir) { // LOOP
   for (TKey& key : get_keys(dir)) {
     const TClass* key_class = get_class(key);
     const char* key_name = key.GetName();
-    if (inherits_from<TF1>(key_class)) { // TF1
-      if (!strstr(key_name,"-logl-")) continue;
+    if (inherits_from<TH1>(key_class)) { // TH1
       const char* bin1 = strchr(key_name,'[');
       const char* bin2 = strchr(bin1+1,')');
+      for (TObject* obj : *key_cast<TH1>(key)->GetListOfFunctions()) {
+        if (!obj->InheritsFrom(TF1::Class())) continue;
+        if (!strstr(obj->GetName(),"-logl")) continue;
+        // TF1 *f = static_cast<TF1*>(obj);
 
-      hj_mass_bins[std::string(bin1,bin2-bin1+1)].push_back(
-        atof(strchr(read_key<TF1>(key)->GetTitle(),'=')+1));
-
+        hj_mass_bins[std::string(bin1,bin2-bin1+1)].push_back(
+          atof(strchr(obj->GetTitle(),'=')+1));
+      }
     } else if (inherits_from<TDirectory>(key_class)) { // DIR
-      loop(read_key<TDirectory>(key));
+      loop(key_cast<TDirectory>(key));
     }
   }
 }
@@ -95,7 +98,7 @@ int main(int argc, char* argv[]) {
   }
 
   for (unsigned f=1, nf=ifnames.size(); f<nf; ++f) {
-    TH1D* h_llr = new TH1D(cat("LLR",f).c_str(),"LLR",bins.size()-1,bins.data());
+    TH1D* h_llr = new TH1D(cat("LLR",f).c_str(),"#Delta(-2LogL)",bins.size()-1,bins.data());
     TH1D* h_p = new TH1D(cat("P",f).c_str(),"P-value",bins.size()-1,bins.data());
     i = 1;
     for (const auto& b : hj_mass_bins) {

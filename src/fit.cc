@@ -51,7 +51,7 @@ const char* pars_names[NPAR] = {"c2","c4","c6","#phi2"};
 int main(int argc, char* argv[]) {
   const char *ifname, *ofname;
   unsigned npar = NPAR;
-  std::array<double,NPAR> pars_init{0,0,0,0}, pars_lim{1,1,1,M_PI};
+  std::array<double,NPAR> pars_init{0,0,0,0};
   std::tuple<unsigned,double,double> hj_mass_binning;
   double fit_range = 1.;
   int print_level = 0;
@@ -66,7 +66,6 @@ int main(int argc, char* argv[]) {
         (npar,'n',cat("number of fit parameters [",npar,']'))
         (fit_range,'r',cat("max cosθ fit range [",fit_range,']'))
         (pars_init,'p',"parameters' initial values")
-        (pars_lim,'l',"parameters' limits")
         (use_chi2_pars,"--use-chi2-pars")
         (nbins,"--nbins",cat('[',nbins,']'))
         (print_level,"--print-level",
@@ -117,20 +116,35 @@ int main(int argc, char* argv[]) {
     // if (ent > 1e6) break;
   }
 
-  // Fit in mass bins ===============================================
-  TF1 *fit = new TF1("fit-logl",Legendre,-1.,1.,npar);
-  // fit->SetNpx(nbins);
-  for (unsigned i=0; i<NPAR; ++i)
+  TF1 *fit = new TF1("fit-logl",Legendre,-1.,1.,NPAR);
+  fit->SetLineColor(2);
+  for (unsigned i=0; i<NPAR; ++i) {
     fit->SetParName(i,pars_names[i]);
+    // fit->SetParLimits(i,-pars_lim[i],pars_lim[i]);
+  }
+  for (unsigned i=npar; i<NPAR; ++i)
+    fit->FixParameter(i,pars_init[i]);
 
   TF1 *fit2 = new TF1("fit-chi2",
     [](const double* x, const double* c){ return c[0]*Legendre(x,c+1); },
-    -1.,1.,npar+1);
-  // fit2->SetNpx(nbins);
+    -1.,1.,NPAR+1);
+  fit2->SetLineColor(418);
   fit2->SetParName(0,"A");
-  for (unsigned i=0; i<NPAR; ++i)
+  for (unsigned i=0; i<NPAR; ++i) {
     fit2->SetParName(i+1,pars_names[i]);
+    fit2->SetParameter(i+1,pars_init[i]);
+  }
+  fit2->SetParLimits(4,-1e-4,M_PI);
+  for (unsigned i=npar; i<NPAR; ++i)
+    fit2->FixParameter(i+1,pars_init[i]);
 
+  if (nbins<100) {
+    const int n = ceil(91./nbins)*nbins;
+    fit ->SetNpx(n);
+    fit2->SetNpx(n);
+  }
+
+  // Fit in mass bins ===============================================
   double pars[NPAR], errs[NPAR];
 
   for (const auto& bin : hj_mass_bins) {
@@ -142,10 +156,9 @@ int main(int argc, char* argv[]) {
     bin.h->SetName(("cos_theta-hj_mass"+hj_mass_bin).c_str());
     bin.h->SetTitle(("hj_mass "+hj_mass_bin).c_str());
     bin.h->SetXTitle(cat("cos #theta / ",fit_range).c_str());
-    bin.h->Write();
 
-    auto LogL = [=,&v=bin.v](const double* c){
-      double logl = 0.;
+    auto LogL = [&v=bin.v](const double* c) -> double {
+      long double logl = 0.;
       const unsigned n = v.size();
       #pragma omp parallel for reduction(+:logl)
       for (unsigned i=0; i<n; ++i)
@@ -155,23 +168,14 @@ int main(int argc, char* argv[]) {
 
     info("χ² fit");
     fit2->SetParameter(0,bin.h->Integral(1,bin.h->GetNbinsX()+1));
-    for (unsigned i=0; i<NPAR; ++i)
-      fit2->SetParameter(i+1,pars_init[i]);
-    auto result = bin.h->Fit(fit2,"S","",-1.,1.);
-    fit2->SetLineColor(418);
-    fit2->SetTitle(cat(
+    auto result = bin.h->Fit(fit2,"SR0");
+    TF1 *f = static_cast<TF1*>(bin.h->GetListOfFunctions()->At(0));
+    f->SetTitle(cat(
+        std::setprecision(15),std::scientific,
         "#chi^{2} = ",result->Chi2(),","
         "-2LogL = ",LogL(fit2->GetParameters()+1)
       ).c_str());
-    fit2->SetName(("fit-chi2-hj_mass"+hj_mass_bin).c_str());
-    fit2->Write();
-    fit2->SetName("fit2");
-
-    if (use_chi2_pars) {
-      for (unsigned i=0; i<npar; ++i)
-        pars_init[i] = fit2->GetParameter(i+1);
-      mod_phi_ref(pars_init[3]);
-    }
+    // f->SetParameter(4, npar>3 ? mod_phi(f->GetParameter(4)) : 0.);
 
     info("LogL fit");
     minuit<decltype(LogL)> m(NPAR,LogL);
@@ -181,10 +185,10 @@ int main(int argc, char* argv[]) {
       m.DefineParameter(
         i,             // parameter number
         pars_names[i], // parameter name
-        pars_init[i],  // start value
-        0.1,           // step size
-        -pars_lim[i],  // mininum
-        pars_lim[i]    // maximum
+        use_chi2_pars ? f->GetParameter(i+1) : pars_init[i],  // start value
+        0.01,          // step size
+        i==3 ? -1e-4 : 0, // mininum
+        i==3 ?  M_PI : 0  // maximum
       );
 
     switch (npar) {
@@ -201,11 +205,12 @@ int main(int argc, char* argv[]) {
 
     fit->SetParameters(pars);
     fit->SetParErrors(errs);
-    fit->SetLineColor(2);
-    fit->SetTitle(cat("-2LogL = ",LogL(pars)).c_str());
-    fit->SetName(("fit-logl-hj_mass"+hj_mass_bin).c_str());
-    fit->Write();
-    fit->SetName("fit");
+    fit->SetTitle(cat(
+      std::setprecision(17),std::scientific,
+      "-2LogL = ",LogL(pars)).c_str());
+    bin.h->GetListOfFunctions()->Add(fit);
+
+    bin.h->Write();
   }
 
   info("Saving",fout.GetName());

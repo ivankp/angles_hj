@@ -28,7 +28,7 @@ $(eval n = $(word 3,$W))
 $(eval r = $(word 4,$W))
 endef
 
-.PHONY: all
+.PHONY: all clean
 
 all: $(FITS_pdf) $(PARS_pdf) $(LLR_pdf)
 	@echo $(LLR)
@@ -57,5 +57,8 @@ $(LLR): llr_$(SUF)_%.root: $(foreach n,$(NPAR),$(call FIT,$n,%))
 	../bin/llr $^ -o $@
 
 $(LLR_pdf): %.pdf: %.root
-	rxplot $< -o $@ -r 'sn/^P.*' 'xx/^.*/Hj mass [GeV]'
+	rxplot $< -o $@ -r 'xx/^.*/Hj mass [GeV]' --logy
+
+clean:
+	@rm -fv $(FITS) $(FITS_pdf) $(PARS) $(PARS_pdf) $(LLR) $(LLR_pdf)
 
