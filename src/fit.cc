@@ -116,12 +116,14 @@ int main(int argc, char* argv[]) {
     // if (ent > 1e6) break;
   }
 
+  const std::array<std::array<double,2>,NPAR> limits {{
+    {-1e-4,2.}, {0.,0.}, {0.,0.}, {-1e-4,M_PI}
+  }};
+
   TF1 *fit = new TF1("fit-logl",Legendre,-1.,1.,NPAR);
   fit->SetLineColor(2);
-  for (unsigned i=0; i<NPAR; ++i) {
+  for (unsigned i=0; i<NPAR; ++i)
     fit->SetParName(i,pars_names[i]);
-    // fit->SetParLimits(i,-pars_lim[i],pars_lim[i]);
-  }
   for (unsigned i=npar; i<NPAR; ++i)
     fit->FixParameter(i,pars_init[i]);
 
@@ -133,8 +135,8 @@ int main(int argc, char* argv[]) {
   for (unsigned i=0; i<NPAR; ++i) {
     fit2->SetParName(i+1,pars_names[i]);
     fit2->SetParameter(i+1,pars_init[i]);
+    fit2->SetParLimits(i+1,limits[i][0],limits[i][1]);
   }
-  fit2->SetParLimits(4,-1e-4,M_PI);
   for (unsigned i=npar; i<NPAR; ++i)
     fit2->FixParameter(i+1,pars_init[i]);
 
@@ -168,7 +170,7 @@ int main(int argc, char* argv[]) {
 
     info("χ² fit");
     fit2->SetParameter(0,bin.h->Integral(1,bin.h->GetNbinsX()+1));
-    auto result = bin.h->Fit(fit2,"SR0");
+    auto result = bin.h->Fit(fit2,"SR0V");
     TF1 *f = static_cast<TF1*>(bin.h->GetListOfFunctions()->At(0));
     f->SetTitle(cat(
         std::setprecision(15),std::scientific,
@@ -187,8 +189,8 @@ int main(int argc, char* argv[]) {
         pars_names[i], // parameter name
         use_chi2_pars ? f->GetParameter(i+1) : pars_init[i],  // start value
         0.01,          // step size
-        i==3 ? -1e-4 : 0, // mininum
-        i==3 ?  M_PI : 0  // maximum
+        limits[i][0],  // mininum
+        limits[i][1]   // maximum
       );
 
     switch (npar) {
