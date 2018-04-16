@@ -5,33 +5,20 @@
 
 #include <string>
 #include <sstream>
-#include <utility>
 
 namespace ivanp {
 
-namespace detail {
-
-template <typename S>
-inline void cat_impl(S& s) { }
-
-template <typename S, typename T>
-inline void cat_impl(S& s, const T& t) { s << t; }
-
-template <typename S, typename T, typename... TT>
-inline void cat_impl(S& s, const T& t, const TT&... tt) {
-  s << t;
-  cat_impl(s,tt...);
-}
-
-}
-
-template <typename... TT>
-inline std::string cat(const TT&... tt) {
+template <typename... T>
+inline std::string cat(T&&... x) {
   std::stringstream ss;
-  detail::cat_impl(ss,tt...);
+  using expander = int[];
+  (void)expander{0, ((void)(ss << std::forward<T>(x)), 0)...};
   return ss.str();
 }
 inline std::string cat() { return { }; }
+
+inline std::string cat(std::string x) { return x; }
+inline std::string cat(const char* x) { return x; }
 
 }
 

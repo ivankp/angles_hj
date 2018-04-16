@@ -14,13 +14,10 @@
 #include "catstr.hh"
 #include "tuple_alg.hh"
 #include "seq_alg.hh"
+#include "error.hh"
 
 namespace ivanp { namespace po {
-struct error : std::runtime_error {
-  using std::runtime_error::runtime_error;
-  template <typename... Args>
-  error(const Args&... args): error(cat(args...)) { }
-};
+  using error = ::ivanp::error;
 }}
 
 #ifdef __GNUG__

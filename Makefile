@@ -40,6 +40,9 @@ L_fit1 := $(ROOT_LDLIBS) -lMinuit
 C_fit := -fopenmp $(ROOT_CXXFLAGS)
 L_fit := -fopenmp $(ROOT_LDLIBS) -lMinuit
 
+C_fit2 := -fopenmp $(ROOT_CXXFLAGS)
+L_fit2 := -fopenmp $(ROOT_LDLIBS) -lMinuit -lTreePlayer
+
 C_mc_test := $(ROOT_CXXFLAGS)
 L_mc_test := $(ROOT_LDLIBS) -lMinuit
 
@@ -67,7 +70,7 @@ EXES := $(patsubst $(SRC)%$(EXT),$(BIN)%,$(shell $(GREP_EXES)))
 all: $(EXES)
 
 $(BIN)/angles1 $(BIN)/angles \
-$(BIN)/fit1 $(BIN)/fit $(BIN)/mc_test \
+$(BIN)/fit1 $(BIN)/fit $(BIN)/fit2 $(BIN)/mc_test \
 $(BIN)/draw1 $(BIN)/draw $(BIN)/pars $(BIN)/llr $(BIN)/drawf \
 : $(BLD)/program_options.o
 
