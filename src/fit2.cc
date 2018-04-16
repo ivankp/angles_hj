@@ -221,6 +221,8 @@ int main(int argc, char* argv[]) {
     hj_mass_bins(hj_mass);
   } // end event loop
 
+  decltype(hj_mass_bins)::bin_type::id<isp>() = 0;
+
   // OUTPUT FILE ####################################################
   std::ofstream out(ofname);
   out.precision(prec);
@@ -241,8 +243,6 @@ int main(int argc, char* argv[]) {
   }}
 
   out << "},";
-
-  decltype(hj_mass_bins)::bin_type::id<isp>() = 0;
 
   // FITTING ########################################################
   double pars[NPAR+1], errs[NPAR+1];
@@ -279,7 +279,7 @@ int main(int argc, char* argv[]) {
 
     out << '{';
 
-    info("χ² fit"); // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    // --------------------------------------------------------------
     auto fChi2 = [&b=h.bins(),&mid](const double* c) -> double {
       double chi2 = 0.;
       const unsigned n = b.size();
@@ -288,6 +288,16 @@ int main(int argc, char* argv[]) {
       return chi2;
     };
 
+    auto fLogL = [&v](const double* c) -> double {
+      long double logl = 0.;
+      const unsigned n = v.size();
+      #pragma omp parallel for reduction(+:logl)
+      for (unsigned i=0; i<n; ++i)
+        logl += v[i].w*log(Legendre(&v[i].x,c));
+      return -2.*logl;
+    };
+
+    info("χ² fit"); // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     minuit<decltype(fChi2)> mChi2(NPAR,fChi2);
     mChi2.SetPrintLevel(print_level);
 
@@ -301,26 +311,16 @@ int main(int argc, char* argv[]) {
     mChi2.Migrad();
 
     out << "\"chi2\":{";
-    { bool first = true;
     for (unsigned i=0; i<=NPAR; ++i) {
-      if (!first) out << ',';
-      else first = false;
       mChi2.GetParameter(i,pars[i],errs[i]);
       out <<'\"'<< mChi2.fCpnam[i] << "\":["
-          << pars[i] <<','<< errs[i] << "]";
-    }}
+          << pars[i] <<','<< errs[i] << "],";
+    }
+    out << "\"chi2\":" << fChi2(pars);
+    out << ",\"logl\":" << fLogL(pars);
     out << "},";
 
     info("LogL fit"); // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    auto fLogL = [&v](const double* c) -> double {
-      long double logl = 0.;
-      const unsigned n = v.size();
-      #pragma omp parallel for reduction(+:logl)
-      for (unsigned i=0; i<n; ++i)
-        logl += v[i].w*log(Legendre(&v[i].x,c));
-      return -2.*logl;
-    };
-
     minuit<decltype(fLogL)> mLogL(NPAR,fLogL);
     mLogL.SetPrintLevel(print_level);
 
@@ -332,14 +332,13 @@ int main(int argc, char* argv[]) {
     mLogL.Migrad();
 
     out << "\"logl\":{";
-    { bool first = true;
     for (unsigned i=0; i<NPAR; ++i) {
-      if (!first) out << ',';
-      else first = false;
       mChi2.GetParameter(i,pars[i],errs[i]);
       out <<'\"'<< mChi2.fCpnam[i] << "\":["
-          << pars[i] <<','<< errs[i] << "]";
-    }}
+          << pars[i] <<','<< errs[i] << "],";
+    }
+    out << "\"chi2\":" << fChi2(pars);
+    out << ",\"logl\":" << fLogL(pars);
     out << "}";
 
     out << "},[";
@@ -347,7 +346,7 @@ int main(int argc, char* argv[]) {
     for (const auto& b : h) {
       if (!first) out << ',';
       else first = false;
-      out << '[' << b.w <<','<< b.w2 <<','<< b.n << ']';
+      out << '[' << b.w <<','<< std::sqrt(b.w2) <<','<< b.n << ']';
     }}
     out << "]]";
   }
