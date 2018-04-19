@@ -38,6 +38,19 @@ using boost::optional;
 using namespace ivanp;
 using namespace ivanp::math;
 
+template <typename Str, unsigned N>
+inline bool starts_with(const Str& str, const char(&prefix)[N]) {
+  for (unsigned i=0; i<N-1; ++i)
+    if (str[i]!=prefix[i]) return false;
+  return true;
+}
+template <unsigned N>
+inline bool ends_with(const char* str, const char(&suffix)[N]) {
+  const unsigned len = strlen(str);
+  if (len<N-1) return false;
+  return starts_with(str+(len-N+1),suffix);
+}
+
 double weight = 1., cos_theta;
 
 MAKE_ENUM(isp,(all)(gg)(gq)(qq))
@@ -130,6 +143,8 @@ int main(int argc, char* argv[]) {
     cerr << e << endl;
     return 1;
   }
+
+  const bool root_out = ends_with(ofname,".root");
 
   // Open input ntuples root file ===================================
   TChain chain(tree_name);
@@ -224,39 +239,66 @@ int main(int argc, char* argv[]) {
   decltype(hj_mass_bins)::bin_type::id<isp>() = 0;
 
   // OUTPUT FILE ####################################################
-  std::ofstream out(ofname);
-  out.precision(prec);
-  out << "[{"
-    "\"weight\":["<<total_weight.all<<"],"
-    "\"entries\":["<<total_entries.all<<"],"
-    "\"ncount\":["<<total_ncount.all<<"]"
-    "},{";
+  std::ofstream out;
+  TFile *fout = nullptr;
+  TF1 *tfChi2 = nullptr, *tfLogL = nullptr;
+  TH1 *hist = nullptr;
 
-  { bool first = true;
-  for (const auto& var : cfg.v) {
-    if (!first) out << ',';
-    else first = false;
-    out << '\"' << var.first << "\":["
-        << get<0>(var.second) << ','
-        << get<1>(var.second) << ','
-        << get<2>(var.second) << ']';
-  }}
+  if (root_out) {
+    TH1::AddDirectory(false);
+    fout = new TFile(ofname,"recreate");
+    if (fout->IsZombie()) return 1;
+    fout->cd();
 
-  out << "},";
+    tfChi2 = new TF1("fit-chi2",
+      [](const double* x, const double* c){ return c[NPAR]*Legendre(x,c); },
+      -1.,1.,NPAR+1);
+    tfLogL = new TF1("fit-logl",Legendre,-1.,1.,NPAR);
+
+    for (unsigned i=0; i<NPAR; ++i) {
+      const char* name = cfg.p[i].name.c_str();
+      tfChi2->SetParName(i,name);
+      tfLogL->SetParName(i,name);
+    }
+    tfChi2->SetParName(NPAR,"A");
+    tfChi2->SetLineColor(418);
+    tfLogL->SetLineColor(2);
+
+    hist = new TH1D("","",
+      get<0>(cfg.v["cos"]), get<1>(cfg.v["cos"]), get<2>(cfg.v["cos"]) );
+    hist->SetXTitle("cos #theta");
+
+  } else {
+    out.open(ofname);
+    out.precision(prec);
+    out << "[{"
+      "\"weight\":["<<total_weight.all<<"],"
+      "\"entries\":["<<total_entries.all<<"],"
+      "\"ncount\":["<<total_ncount.all<<"]"
+      "},{";
+
+    { bool first = true;
+    for (const auto& var : cfg.v) {
+      if (!first) out << ',';
+      else first = false;
+      out << '\"' << var.first << "\":["
+          << get<0>(var.second) << ','
+          << get<1>(var.second) << ','
+          << get<2>(var.second) << ']';
+    }}
+
+    out << "},[";
+  }
 
   // FITTING ########################################################
   double pars[NPAR+1], errs[NPAR+1];
 
   for (const auto& bin : hj_mass_bins) { // loop over bins
     static unsigned bin_i = 0;
-    if (bin_i) out << ',';
     const std::string hj_mass_bin = hj_mass_bins.bin_str(++bin_i);
     info("Fitting hj_mass",hj_mass_bin);
     const auto& v = bin->v;
     info("Events",v.size());
-
-    out << "[[" << hj_mass_bins.axis().lower(bin_i)
-        << ',' << hj_mass_bins.axis().upper(bin_i) << "],";
 
     binner<lo_bin, std::tuple<
       axis_spec<uniform_axis<double>, false, false> >
@@ -277,7 +319,22 @@ int main(int argc, char* argv[]) {
     double total_w = 0;
     for (const auto& b : h) total_w += b.w;
 
-    out << '{';
+    if (!root_out) {
+      if (bin_i>1) out << ',';
+      out << "[[" << hj_mass_bins.axis().lower(bin_i)
+          << ',' << hj_mass_bins.axis().upper(bin_i) << "],{";
+    } else {
+      hist->SetName(("cos_theta-hj_mass"+hj_mass_bin).c_str());
+      hist->SetTitle(("hj_mass "+hj_mass_bin).c_str());
+
+      for (unsigned i=1; i<=nbins; ++i) {
+        const auto& b = h.bin({i});
+        hist->SetBinContent(i,b.w);
+        hist->SetBinError(i,std::sqrt(b.w2));
+      }
+
+      hist->GetListOfFunctions()->Clear();
+    }
 
     // --------------------------------------------------------------
     auto fChi2 = [&b=h.bins(),&mid](const double* c) -> double {
@@ -309,16 +366,29 @@ int main(int argc, char* argv[]) {
       NPAR, "A", total_w, total_w*1e-2, total_w*0.1, total_w*10);
 
     mChi2.Migrad();
-
-    out << "\"chi2\":{";
-    for (unsigned i=0; i<=NPAR; ++i) {
+    for (unsigned i=0; i<=NPAR; ++i)
       mChi2.GetParameter(i,pars[i],errs[i]);
-      out <<'\"'<< mChi2.fCpnam[i] << "\":["
-          << pars[i] <<','<< errs[i] << "],";
+
+    if (!root_out) {
+      out << "\"chi2\":{";
+      for (unsigned i=0; i<=NPAR; ++i) {
+        out <<'\"'<< mChi2.fCpnam[i] << "\":["
+            << pars[i] <<','<< errs[i] << "],";
+      }
+      out << "\"chi2\":" << fChi2(pars);
+      out << ",\"logl\":" << fLogL(pars);
+      out << "},";
+    } else {
+      tfChi2->SetParameters(pars);
+      tfChi2->SetParErrors(errs);
+      tfChi2->SetTitle(cat(
+        std::setprecision(15),std::scientific,
+        "#chi^{2} = ",fChi2(pars),","
+        "-2LogL = ",fLogL(pars)
+      ).c_str());
+
+      hist->GetListOfFunctions()->Add(tfChi2->Clone());
     }
-    out << "\"chi2\":" << fChi2(pars);
-    out << ",\"logl\":" << fLogL(pars);
-    out << "},";
 
     info("LogL fit"); // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     minuit<decltype(fLogL)> mLogL(NPAR,fLogL);
@@ -330,25 +400,41 @@ int main(int argc, char* argv[]) {
     }
 
     mLogL.Migrad();
-
-    out << "\"logl\":{";
-    for (unsigned i=0; i<NPAR; ++i) {
+    for (unsigned i=0; i<NPAR; ++i)
       mChi2.GetParameter(i,pars[i],errs[i]);
-      out <<'\"'<< mChi2.fCpnam[i] << "\":["
-          << pars[i] <<','<< errs[i] << "],";
-    }
-    out << "\"chi2\":" << fChi2(pars);
-    out << ",\"logl\":" << fLogL(pars);
-    out << "}";
 
-    out << "},[";
-    { bool first = true;
-    for (const auto& b : h) {
-      if (!first) out << ',';
-      else first = false;
-      out << '[' << b.w <<','<< std::sqrt(b.w2) <<','<< b.n << ']';
-    }}
+    if (!root_out) {
+      out << "\"logl\":{";
+      for (unsigned i=0; i<NPAR; ++i) {
+        out <<'\"'<< mChi2.fCpnam[i] << "\":["
+            << pars[i] <<','<< errs[i] << "],";
+      }
+      out << "\"chi2\":" << fChi2(pars);
+      out << ",\"logl\":" << fLogL(pars);
+      out << "}},[";
+
+      { bool first = true;
+      for (const auto& b : h) {
+        if (!first) out << ',';
+        else first = false;
+        out << '[' << b.w <<','<< std::sqrt(b.w2) <<','<< b.n << ']';
+      }}
+      out << "]]";
+    } else {
+      tfLogL->SetParameters(pars);
+      tfLogL->SetParErrors(errs);
+      tfLogL->SetTitle(cat(
+        std::setprecision(17),std::scientific,
+        "-2LogL = ",fLogL(pars)).c_str());
+
+      hist->GetListOfFunctions()->Add(tfLogL->Clone());
+      hist->Write();
+    }
+  }
+  if (root_out) {
+    info("Saving",fout->GetName());
+    fout->Write(0,TObject::kOverwrite);
+  } else {
     out << "]]";
   }
-  out << ']';
 }
